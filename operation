@@ -1,0 +1,30 @@
+
+User
+
+register *name* *password* *email* *phone*
+login *id* *password*
+query_profile *id*
+modify_profile *id* *name* *password* *email* *phone*
+modify_privilege *id1* *id2* *privilege*
+
+Ticket
+
+query_ticket *loc1* *loc2* *date* *catalog*
+query_transfer *loc1* *loc2* *date* *catalog*
+buy_ticket *id* *num* *train_id* *loc1* *loc2* *date* *ticket_kind*
+query_order *id* *date* *catalog*
+refund_ticket *id* *num* *train_id* *loc1* *loc2* *date* *ticket_kind*
+
+Train
+
+add_train *train_id* *name* *num(station)* *num(price)* *(name(price) ) * num(price)*
+sale_train *train_id*
+query_train *train_id*
+delete_train *train_id*
+modify_train *train_id* *name* *num(station)* *num(price)* *(name(price) ) * num(price)*
+
+Manage
+
+clean
+exit
+
