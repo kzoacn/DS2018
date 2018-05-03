@@ -39,13 +39,13 @@ bool Record;
 bool Debug=false;
 bool inserting=false;
 
-void try_insert(){
+void try_start(){
     if(!inserting){
         inserting=true;
         sqlite3_exec(db,"begin;",0,0,0);
     }
 }
-void try_close_insert(){
+void try_close(){
     if(inserting){
         inserting=false;
         sqlite3_exec(db,"commit;",0,0,0);
@@ -73,12 +73,7 @@ static int callback(void *NotUsed, int argc, char **argv, char **azColName){
 }
 
 void run(string cmd,bool record=false){
-    /*if(cmd.length()>7 && cmd.substr(0,6)!="insert"){
-        try_close_insert();
-    }
-    if(cmd.length()>7 && cmd.substr(0,6)=="insert"){
-        try_insert();
-    }*/
+
     Record=record;
     char *zErrMsg = 0;
 
@@ -97,18 +92,18 @@ void init_user(){
     //sqlite3_exec(db,"drop table if exists User",0,0,0);  
     string table;
 
-    table="Create Table User( "
+    table="Create Table if not exists User( "
             "inner_id   int primary key   not NULL, "
             "id         int               not NULL, "
             "name       text              not NULL, "
             "password   text              not NULL, "
             "email      text              not NULL, "
             "phone      text              not NULL, "
-            "privilege  int               not NULL);";
+            "privilege  int               not NULL)";
 
 
     run(table);
-
+    run("create unique index if not exists idIndex on User(id);");
     //string admin;
     //admin="insert into user values(1,2018,'admin','admin','admin@t.cn','12306',2)";
     //run(admin);
@@ -126,11 +121,16 @@ void show_user(){
     run(cmd);
 }
 
-    sqlite3_stmt *stmt;  
-    const char* sql = "insert into user values(?,?,?,?,?,?,?);";  
 
 int regist(string name,string password,string email,string phone){
-//sqlite3_exec(db,"begin;",0,0,0);  
+ 
+    static int flag=0;
+    static sqlite3_stmt *stmt;  
+    static const char* sql = "insert into user values(?,?,?,?,?,?,?);";  
+    if(!flag){
+        flag=1;
+        sqlite3_prepare_v2(db,sql,strlen(sql),&stmt,0); 
+    }
     inner_id++;
     sqlite3_reset(stmt);
     sqlite3_bind_int(stmt, 1, inner_id);
@@ -141,8 +141,7 @@ int regist(string name,string password,string email,string phone){
     sqlite3_bind_text(stmt, 6, phone.c_str(), phone.length(), SQLITE_STATIC);
     sqlite3_bind_int(stmt, 7, (inner_id == 1 ? 2 : 1));
     sqlite3_step(stmt);
-//sqlite3_exec(db,"commit;",0,0,0); 
-    //sqlite3_finalize(stmt);
+
     return inner_id+2017;
 }
 
@@ -165,50 +164,67 @@ int login(int id,string password){
 string query_profile(int id){
     select_col.clear();
     select_table.clear();
-    run("select * from user where id="+to_string(id)+" limit 1",true);
-    if(select_table.empty())
-        return "0";
-    string ans;
-    for(int i=0;i<select_col.size();i++){
-        if(select_col[i]=="name")
-            ans+=select_table[0][i]+" ";
-        if(select_col[i]=="email")
-            ans+=select_table[0][i]+" ";
-        if(select_col[i]=="phone")
-            ans+=select_table[0][i];
+
+    static int flag=0;
+    static sqlite3_stmt *stmt;  
+    static const char* sql = "select name,email,phone,privilege from user where id=(?) limit 1;";  
+    if(!flag){
+        flag=1;
+        sqlite3_prepare_v2(db,sql,strlen(sql),&stmt,0); 
     }
+    sqlite3_reset(stmt);
+    sqlite3_bind_int(stmt, 1, id);
+    int rc=sqlite3_step(stmt);
+    
+    string ans;
+    if(rc!=SQLITE_ROW)
+        return "0";
+//inner_id,id,name,password,email,phone,privilege
+//   0      1  2     3        4    5      6
+    
+    ans+=(const char*)sqlite3_column_text(stmt,0);ans+=" ";
+    ans+=(const char*)sqlite3_column_text(stmt,1);ans+=" ";
+    ans+=(const char*)sqlite3_column_text(stmt,2);ans+=" ";
+    ans+=to_string(sqlite3_column_int(stmt,3));
     return ans;
 }
 
-int modify_profile(int id,string name,string password,string email,string phone){
-    select_col.clear();
-    select_table.clear();
-    run("select * from user where id="+to_string(id),true);
-    if(select_table.empty())
-        return 0;
-    run("delete from user where id="+to_string(id));
-
-    string cmd;
-
-    cmd="insert into user values("
-            +to_string(id-2017)+", "
-            +to_string(id)+", "
-            +"'"+name+"', "
-            +"'"+password+"', "
-            +"'"+email+"', "
-            +"'"+phone+"', "
-            +(inner_id==1?"2":"1")
-            +");";
-    run(cmd);
-    return 1;
-}
 bool exist_id(int id){
-    select_col.clear();
-    select_table.clear();
-    run("select * from user where id="+to_string(id),true);
-    if(select_table.empty())
+    static int flag=0;
+    static sqlite3_stmt *stmt;  
+    static const char* sql = "select id from user where id=(?) limit 1;";  
+    if(!flag){
+        flag=1;
+        sqlite3_prepare_v2(db,sql,strlen(sql),&stmt,0); 
+    }
+    sqlite3_reset(stmt);
+    sqlite3_bind_int(stmt, 1, id);
+    int rc=sqlite3_step(stmt);
+    
+    string ans;
+    if(rc!=SQLITE_ROW)
         return false;
     return true;
+}
+int modify_profile(int id,string name,string password,string email,string phone){
+    if(!exist_id(id))
+        return 0;
+    static int flag=0;
+    static sqlite3_stmt *stmt;  
+    static const char* sql = "update user set name=(?),password=(?),email=(?),phone=(?) where id=(?);";  
+    if(!flag){
+        flag=1;
+        sqlite3_prepare_v2(db,sql,strlen(sql),&stmt,0); 
+    }
+    sqlite3_reset(stmt);
+    sqlite3_bind_text(stmt, 1, name.c_str(), name.length(), SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, password.c_str(), password.length(), SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, email.c_str(), email.length(), SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 4, phone.c_str(), phone.length(), SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 5, id);
+    sqlite3_step(stmt);
+        
+    return 1;
 }
 int to_int(string s){
     int x=0;
@@ -218,30 +234,43 @@ int to_int(string s){
     return x;
 }
 int get_privilege(int id){
-    select_col.clear();
-    select_table.clear();
-    run("select * from user where id="+to_string(id),true);
-    if(select_table.empty())
-        return 0;
-    int pri=0;
-    for(int i=0;i<select_col.size();i++){
-        if(select_col[i]=="privilege"){
-            pri=to_int(select_table[0][i]);    
-        }
+    static int flag=0;
+    static sqlite3_stmt *stmt;  
+    static const char* sql = "select privilege from user where id=(?) limit 1;";  
+    if(!flag){
+        flag=1;
+        sqlite3_prepare_v2(db,sql,strlen(sql),&stmt,0); 
     }
-    return pri;
+    sqlite3_reset(stmt);
+    sqlite3_bind_int(stmt, 1, id);
+    int rc=sqlite3_step(stmt);
+    int ans=0;
+    if(rc!=SQLITE_ROW)
+        return 0;
+    
+    ans=to_int(to_string(sqlite3_column_int(stmt,0)));
+    return ans;
 }
 
 int modify_privilege(int id1,int id2,int privilege){
-    if(!exist_id(id2))
+    int pri1=(id1==2018) ? 2 :get_privilege(id1);
+    if(pri1!=2)
         return 0;
-    int pri1=get_privilege(id1);
     int pri2=get_privilege(id2);
-    if(pri1!=2 || pri2==2)
+    if(pri2==2 || pri2==0)
         return 0;
-    string cmd;
-    cmd="update user set privilege="+to_string(privilege)+" where id="+to_string(id2)+";";
-    run(cmd);
+    static int flag=0;
+    static sqlite3_stmt *stmt;  
+    static const char* sql = "update user set privilege=(?) where id=(?);";  
+    if(!flag){
+        flag=1;
+        sqlite3_prepare_v2(db,sql,strlen(sql),&stmt,0); 
+    }
+    sqlite3_reset(stmt);
+    sqlite3_bind_int(stmt, 1, privilege);
+    sqlite3_bind_int(stmt, 2, id2);
+    sqlite3_step(stmt);
+        
     return 1;
 }
 
@@ -258,16 +287,21 @@ int main(){
     }else{
         fprintf(stderr, "Opened database successfully\n");
     }
-sqlite3_exec(db,"PRAGMA synchronous = OFF; ",0,0,0);  
+    sqlite3_exec(db,"PRAGMA synchronous = OFF; ",0,0,0);  
     init_user();
     show_user();
     //freopen("small.in","r",stdin);
 
     //ios::sync_with_stdio(false);
-    //cin.tie(0);
-sqlite3_prepare_v2(db,sql,strlen(sql),&stmt,0);  
+    //cin.tie(0); 
     string cmd;
+    try_start();
     while(cin>>cmd){
+        /*if(cmd=="register"){
+            try_insert();
+        }else{
+            try_close_insert();
+        }*/
         
         if(cmd=="register"){
             string name,password,email,phone;
@@ -327,10 +361,11 @@ sqlite3_prepare_v2(db,sql,strlen(sql),&stmt,0);
 
         }else
         if(cmd=="clean"){
+            
             cout<<clean()<<endl;
         }else
         if(cmd=="exit"){
-            try_close_insert();
+            try_close();
             cout<<"BYE"<<endl;
             break;
         }else{
