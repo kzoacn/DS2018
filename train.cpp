@@ -1,7 +1,29 @@
 #include<bits/stdc++.h>
 #include<sqlite3.h>
+#include"binary.hpp"
 using namespace std;
-
+using namespace sjtu;
+InputOfBinary bin;
+OutputOfBinary bout;
+char buff[1<<20];
+int to_int(string s){
+    int x=0;
+    for(unsigned i=0;i<s.length();i++){
+        x=x*10+(s[i]-'0');
+    }
+    return x;
+}
+double to_double(string s){
+    for(int i=0;i<s.length();i++){
+        if(s[i]=='.'){
+            double x=to_int(s.substr(0,i));
+            double y=to_int(s.substr(i+1,(int)s.length()-i-1));
+            while(y>=1)y/=10;
+            return x+y;
+        }
+    }
+    return to_int(s);
+}
 
 class User{
 public:
@@ -16,19 +38,53 @@ class Date{
     string to_string(){}
 };
 
+int tcount=0,sum=0;
 class Train{
+public:
     string train_id;
     string name;
+	string catalog;
     int num_station;
     int num_price;
     vector<string>ticket_name;
     vector<string>station_name;
-    vector<Date>arriv_time;
-    vector<Date>start_time;
-    vector<Date>stopver_time;
+    vector<string>arriv_time;
+    vector<string>start_time;
+    vector<string>stopover_time;
     vector<vector<double> >price;
     int on_sale;
-};
+
+	void read(){
+        //if(++tcount > 5)exit(0);
+        tcount++;
+		cin>>train_id;
+		cin>>name;
+		cin>>catalog;
+		cin>>num_station>>num_price;
+		ticket_name.resize(num_price);
+		station_name.resize(num_station);
+		arriv_time.resize(num_station);
+		start_time.resize(num_station);
+        stopover_time.resize(num_station);
+        price.resize(num_station);
+        for(auto &vec : price)
+            vec.resize(num_price);
+		for(int i=0;i<num_price;i++){
+			cin>>ticket_name[i];
+        }
+		for(int i=0;i<num_station;i++){
+            cin>>station_name[i];
+            cin>>arriv_time[i]>>start_time[i]>>stopover_time[i];
+            for(int j=0;j<num_price;j++){
+                string pri;cin>>pri;
+                price[i][j]=to_double(pri.substr(3,pri.length()-3));
+            }
+        }
+
+	}
+}train;
+
+
 
 
 sqlite3 *db;
@@ -180,8 +236,7 @@ string query_profile(int id){
     if(rc!=SQLITE_ROW)
         return "0";
 //inner_id,id,name,password,email,phone,privilege
-//   0      1  2     3        4    5      6
-    
+//   0      1  2     3        4    5      6  
     ans+=(const char*)sqlite3_column_text(stmt,0);ans+=" ";
     ans+=(const char*)sqlite3_column_text(stmt,1);ans+=" ";
     ans+=(const char*)sqlite3_column_text(stmt,2);ans+=" ";
@@ -226,13 +281,7 @@ int modify_profile(int id,string name,string password,string email,string phone)
         
     return 1;
 }
-int to_int(string s){
-    int x=0;
-    for(unsigned i=0;i<s.length();i++){
-        x=x*10+(s[i]-'0');
-    }
-    return x;
-}
+
 int get_privilege(int id){
     static int flag=0;
     static sqlite3_stmt *stmt;  
@@ -346,7 +395,7 @@ int main(){
 
         }else
         if(cmd=="add_train"){
-
+            train.read();
         }else
         if(cmd=="sale_train"){
 
@@ -373,5 +422,6 @@ int main(){
         }
     }
     sqlite3_close(db);
+    //for(auto s:K)cout<<s<<endl;
     return 0;
 }

@@ -1,0 +1,71 @@
+create table if not exists routine(
+    id int primary key,
+    loc1 text,
+    loc2 text,
+    date text,
+    catalog text,
+    trainid text
+);
+create index if not exists rindex on routine(loc1,loc2,date,catalog);
+
+create table if not exists ticket(
+    buyid int primary key,
+    id int,
+    num int,
+    trainid text,
+    loc1 text,
+    loc2 text,
+    date text,
+    catalog text,
+    ticket_kind text
+);
+create index if not exists tindex1 on ticket(id,date,catalog);
+create index if not exists tindex2 on ticket(id,date,trainid,loc1,loc2,ticket_kind);
+
+
+create table if not exists train(
+    trainid text primary key,
+    onsale int,
+    sold int,
+    info blob
+);
+
+query_ticket *loc1* *loc2* *date* *catalog*{
+select info from train where trainid in 
+(select trainid from routine where loc1=(?),loc2=(?),date=(?),catalog=(?));
+
+}
+
+query_transfer *loc1* *loc2* *date* *catalog* //
+
+buy_ticket *id* *num* *train_id* *loc1* *loc2* *date* *ticket_kind*{
+    select * from ticket where  = = =;
+    insert into ticket values(???);
+    update ticket set num=num+? where = = ==;
+}
+
+refund_ticket *id* *num* *train_id* *loc1* *loc2* *date* *ticket_kind*{
+    select * from ticket where  = = =;
+    insert into ticket values(???);
+    update ticket set num=num+? where = = ==;
+    delete where  = = =    
+}
+
+add_train{
+    insert into train values(???)
+}
+sale_train{
+    select onsale where trainid=?;
+    // insert into routine
+}
+query_train *train_id*{
+    select * from train where trainid=?;
+}
+delete_train *train_id*{
+    select sold from train where trainid=?;
+    delete from train where trainid=?;
+}
+modify_train{
+    delete;
+    insert;
+}
