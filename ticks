@@ -2,7 +2,6 @@ create table if not exists routine(
     id int primary key,
     loc1 text,
     loc2 text,
-    date text,
     catalog text,
     trainid text
 );
@@ -24,11 +23,15 @@ create index if not exists tindex2 on ticket(id,date,trainid,loc1,loc2,ticket_ki
 
 
 create table if not exists train(
-    trainid text primary key,
+    id primary key,
+    trainid text ,
     onsale int,
     sold int,
-    info blob
+    info blob,
+    date text
 );
+
+
 
 query_ticket *loc1* *loc2* *date* *catalog*{
 select info from train where trainid in 
@@ -61,9 +64,12 @@ sale_train{
 query_train *train_id*{
     select * from train where trainid=?;
 }
+
+
 delete_train *train_id*{
     select sold from train where trainid=?;
     delete from train where trainid=?;
+    delete from routine where trainid=?;
 }
 modify_train{
     delete;

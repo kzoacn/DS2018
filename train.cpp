@@ -6,6 +6,7 @@ using namespace sjtu;
 InputOfBinary bin;
 OutputOfBinary bout;
 char buff[1<<20];
+const string birthday="2018-04-01";
 int to_int(string s){
     int x=0;
     for(unsigned i=0;i<s.length();i++){
@@ -52,7 +53,18 @@ public:
     vector<string>start_time;
     vector<string>stopover_time;
     vector<vector<double> >price;
-    int on_sale;
+    vector<vector<int> >ticket;
+    char* to_blob(){
+        bout.open(buff);
+        bout<<train_id<<name<<catalog<<num_station<<num_price;
+        bout<<ticket_name<<station_name<<arriv_time<<start_time<<stopover_time<<price<<ticket;
+        return buff;
+    }
+    void from_blob(char* s){
+        bin.open(s);
+        bin>>train_id>>name>>catalog>>num_station>>num_price;
+        bin>>ticket_name>>station_name>>arriv_time>>start_time>>stopover_time>>price>>ticket;
+    }
 
 	void read(){
         //if(++tcount > 5)exit(0);
@@ -69,6 +81,9 @@ public:
         price.resize(num_station);
         for(auto &vec : price)
             vec.resize(num_price);
+        ticket.resize(num_station);
+        for(auto &vec : ticket)
+            vec.resize(num_price);
 		for(int i=0;i<num_price;i++){
 			cin>>ticket_name[i];
         }
@@ -78,10 +93,24 @@ public:
             for(int j=0;j<num_price;j++){
                 string pri;cin>>pri;
                 price[i][j]=to_double(pri.substr(3,pri.length()-3));
+                ticket[i][j]=2000;
             }
         }
 
 	}
+    void print(){
+        cout<<fixed<<setprecision(2);
+        cout<<train_id<<" "<<name<<" "<<num_station<<" "<<num_price;
+        for(auto s:ticket_name)cout<<" "<<s;cout<<endl;
+		for(int i=0;i<num_station;i++){
+            cout<<station_name[i]<<" ";
+            cout<<arriv_time[i]<<" "<<start_time[i]<<" "<<stopover_time[i]<<" ";
+            for(int j=0;j<num_price;j++){
+                cout<<" ￥"<<price[i][j];
+            }
+            cout<<endl;
+        }        
+    }
 }train;
 
 
@@ -143,12 +172,19 @@ void run(string cmd,bool record=false){
     }    
 }
 
-void init_user(){
-
+void init_database(){
+    int rc = sqlite3_open("test.db", &db);
+    if( rc ){
+        fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
+        exit(0);
+    }else{
+        fprintf(stderr, "Opened database successfully\n");
+    }
+    sqlite3_exec(db,"PRAGMA synchronous = OFF; ",0,0,0);  
     //sqlite3_exec(db,"drop table if exists User",0,0,0);  
     string table;
 
-    table="Create Table if not exists User( "
+    table="Create Table if not exists user( "
             "inner_id   int primary key   not NULL, "
             "id         int               not NULL, "
             "name       text              not NULL, "
@@ -159,22 +195,52 @@ void init_user(){
 
 
     run(table);
-    run("create unique index if not exists idIndex on User(id);");
-    //string admin;
-    //admin="insert into user values(1,2018,'admin','admin','admin@t.cn','12306',2)";
-    //run(admin);
+    run("create unique index if not exists idIndex on user(id);");
+
+    table="create table if not exists routine( \
+            id integer primary key autoincrement, \
+            loc1 text, \
+            loc2 text, \
+            catalog text, \
+            trainid text);";
+
+    run(table);
+    run("create index if not exists rindex on routine(loc1,loc2,catalog);");
+
+    table="create table if not exists ticket( \
+            buyid integer primary key autoincrement, \
+            id int, \
+            num int, \
+            trainid text,\
+            loc1 text,\
+            loc2 text,\
+            date text,\
+            catalog text,\
+            ticket_kind text);";
+
+    run(table);
+    run("create index if not exists tindex1 on ticket(id,date,catalog);");
+    run("create index if not exists tindex2 on ticket(id,date,trainid,loc1,loc2,ticket_kind);");
+
+    table="create table if not exists train( \
+            id integer primary key autoincrement, \
+            trainid text , \
+            onsale int, \
+            sold int, \
+            info blob, \
+            date text \
+        );";
+
+    run(table);
+    run("create index if not exists trindex on train(trainid);");
+
+
 
     select_table.clear();
     run("select count(*) from user;",true);
     inner_id=0;
     for(int i=0;i<select_table[0][0].length();i++)
         inner_id=inner_id*10+(select_table[0][0][i]-'0');
-}
-void show_user(){
-    string cmd;
-    cmd="select * from user;";
-    //cmd="select count(*) from user;";
-    run(cmd);
 }
 
 
@@ -261,6 +327,23 @@ bool exist_id(int id){
         return false;
     return true;
 }
+bool exist_trainid(string id){
+    static int flag=0;
+    static sqlite3_stmt *stmt;  
+    static const char* sql = "select id from train where trainid=(?) limit 1;";  
+    if(!flag){
+        flag=1;
+        sqlite3_prepare_v2(db,sql,strlen(sql),&stmt,0); 
+    }
+    sqlite3_reset(stmt);
+    sqlite3_bind_text(stmt, 1, id.c_str(),id.length(),SQLITE_STATIC);
+    int rc=sqlite3_step(stmt);
+    
+    string ans;
+    if(rc!=SQLITE_ROW)
+        return false;
+    return true;
+}
 int modify_profile(int id,string name,string password,string email,string phone){
     if(!exist_id(id))
         return 0;
@@ -324,33 +407,149 @@ int modify_privilege(int id1,int id2,int privilege){
 }
 
 int clean(){
+    try_close();
     run("drop table user");
     return 1;
 }
 
-int main(){
-    int rc = sqlite3_open("test.db", &db);
-    if( rc ){
-        fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
-        exit(0);
-    }else{
-        fprintf(stderr, "Opened database successfully\n");
+int add_train(Train &train){
+    static int flag=0;
+    static sqlite3_stmt *stmt;  
+    static const char* sql = "insert into train values(NULL,?,?,?,?,?);";  
+    if(!flag){
+        flag=1;
+        sqlite3_prepare_v2(db,sql,strlen(sql),&stmt,0); 
     }
-    sqlite3_exec(db,"PRAGMA synchronous = OFF; ",0,0,0);  
-    init_user();
-    show_user();
-    //freopen("small.in","r",stdin);
+    for(int i=1;i<=30;i++){
+        sqlite3_reset(stmt);
+        sqlite3_bind_text(stmt, 1, train.train_id.c_str(), train.train_id.length(), SQLITE_STATIC);
+        sqlite3_bind_int(stmt,2,0);
+        sqlite3_bind_int(stmt,3,0);
+        char *buff=train.to_blob();
+        sqlite3_bind_blob(stmt,4,buff,bout.fout.cur-buff,0);
+        string  start="2018-04-"+string(1,'0'+i/10)+string(1,'0'+i%10);
+        sqlite3_bind_text(stmt, 5, start.c_str(), start.length(), SQLITE_STATIC);
+        sqlite3_step(stmt);
+    }
+    return 1;
+}
 
-    //ios::sync_with_stdio(false);
-    //cin.tie(0); 
+void query_train(string trainid){
+    static int flag=0;
+    static sqlite3_stmt *stmt;  
+    static const char* sql = "select info from train where trainid=(?) limit 1;";  
+    if(!flag){
+        flag=1;
+        sqlite3_prepare_v2(db,sql,strlen(sql),&stmt,0); 
+    }
+    sqlite3_reset(stmt);
+    sqlite3_bind_text(stmt, 1, trainid.c_str(),trainid.length(),SQLITE_STATIC);
+    int rc=sqlite3_step(stmt);
+    
+    string ans;
+    if(rc!=SQLITE_ROW){
+        cout<<"0"<<endl;
+        return ;
+    }
+    train.from_blob((char*)sqlite3_column_blob(stmt,0));
+    train.print();
+}
+
+int sale_train(string trainid){
+    static int flag=0;
+    static sqlite3_stmt *stmt,*stmt2,*stmt3;  
+    static const char* sql = "select info,onsale from train where trainid=(?) limit 1;";  
+    static const char* sql2 = "update train set onsale=1 where trainid=(?) ;";  
+    static const char* sql3 = "insert into routine values(NULL,?,?,?,?);";  
+    
+    if(!flag){
+        flag=1;
+        sqlite3_prepare_v2(db,sql,strlen(sql),&stmt,0); 
+        sqlite3_prepare_v2(db,sql2,strlen(sql2),&stmt2,0); 
+        sqlite3_prepare_v2(db,sql3,strlen(sql3),&stmt3,0); 
+    }
+    sqlite3_reset(stmt);
+    sqlite3_bind_text(stmt, 1, trainid.c_str(),trainid.length(),SQLITE_STATIC);
+    int rc=sqlite3_step(stmt);
+    
+    string ans;
+    if(rc!=SQLITE_ROW){
+        return 0;
+    }
+    train.from_blob((char*)sqlite3_column_blob(stmt,0));
+    int onsale=sqlite3_column_int(stmt,1);
+    if(onsale) 
+        return 0;
+    sqlite3_reset(stmt2);
+    sqlite3_bind_text(stmt2, 1, trainid.c_str(),trainid.length(),SQLITE_STATIC);
+    sqlite3_step(stmt2);
+
+    for(int i=0;i<train.num_station;i++){
+        for(int j=i+1;j<train.num_station;j++){
+            sqlite3_reset(stmt3);
+            sqlite3_bind_text(stmt3, 1, train.station_name[i].c_str(),train.station_name[i].length(),SQLITE_STATIC);
+            sqlite3_bind_text(stmt3, 2, train.station_name[j].c_str(),train.station_name[j].length(),SQLITE_STATIC);
+            sqlite3_bind_text(stmt3, 3, train.catalog.c_str(),train.catalog.length(),SQLITE_STATIC);
+            sqlite3_bind_text(stmt3, 4, train.train_id.c_str(),train.train_id.length(),SQLITE_STATIC);
+            sqlite3_step(stmt3);
+        }
+    }
+        
+    return 1;
+}
+void query_ticket(string loc1,string loc2,string date,string catalog){
+    static int flag=0;
+    static sqlite3_stmt *stmt;  
+    static const char* sql = "select info from train where date=(?) and trainid in (select trainid from routine where loc1=(?) and loc2=(?) and catalog=(?));";  
+    if(!flag){
+        flag=1;
+        sqlite3_prepare_v2(db,sql,strlen(sql),&stmt,0); 
+    }
+    sqlite3_reset(stmt);
+    sqlite3_bind_text(stmt, 1, date.c_str(),date.length(),SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, loc1.c_str(),loc1.length(),SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, loc2.c_str(),loc2.length(),SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 4, catalog.c_str(),catalog.length(),SQLITE_STATIC);
+    int rc=sqlite3_step(stmt);
+
+    string ans;
+    if(rc!=SQLITE_ROW){
+        cout<<"0"<<endl;
+        return ;
+    }
+    int cnt=0;
+    string dt;
+    while(rc==SQLITE_ROW){
+        cnt++;
+        train.from_blob((char*)sqlite3_column_blob(stmt,0));
+        rc=sqlite3_step(stmt);
+        ans+=train.train_id+" ";
+        int posi=-1,posj=-1;
+        for(int i=0;i<train.num_station;i++)if(train.station_name[i]==loc1)posi=i;
+        for(int i=0;i<train.num_station;i++)if(train.station_name[i]==loc2)posj=i;
+        ans+=loc1+" "+date+" "+train.start_time[posi]+" ";
+        ans+=loc2+" "+date+" "+train.arriv_time[posj];
+        for(int i=0;i<train.num_price;i++){
+            ans+=" "+train.ticket_name[i];
+            double sum=0;
+            int num=int(1e9);
+            for(int k=posi;k<posj;k++){
+                sum+=train.price[k][i];
+                num=min(num,train.ticket[k][i]);
+            }
+            ans+=" "+to_string(num)+" "+to_string(sum);
+        }
+        ans+="\n";
+    }
+    cout<<cnt<<endl;
+    cout<<ans;
+}
+int main(){
+
+    init_database();
     string cmd;
     try_start();
     while(cin>>cmd){
-        /*if(cmd=="register"){
-            try_insert();
-        }else{
-            try_close_insert();
-        }*/
         
         if(cmd=="register"){
             string name,password,email,phone;
@@ -380,7 +579,9 @@ int main(){
             cout<<modify_privilege(id1,id2,privilege)<<endl;
         }else
         if(cmd=="query_ticket"){
-
+            string loc1,loc2,date,catalog;
+            cin>>loc1>>loc2>>date>>catalog;
+            query_ticket(loc1,loc2,date,catalog);
         }else
         if(cmd=="query_transfer"){
 
@@ -396,12 +597,17 @@ int main(){
         }else
         if(cmd=="add_train"){
             train.read();
+            cout<<add_train(train)<<endl;
         }else
         if(cmd=="sale_train"){
-
+            string trainid;
+            cin>>trainid;
+            cout<<sale_train(trainid)<<endl;
         }else
         if(cmd=="query_train"){
-            
+            string trainid;
+            cin>>trainid;
+            query_train(trainid);
         }else
         if(cmd=="delete_train"){
 

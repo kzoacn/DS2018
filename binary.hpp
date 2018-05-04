@@ -19,7 +19,7 @@ namespace sjtu {
     using std::ifstream;
     using std::ofstream;
     class mystream{
-    private:
+    public:
         char* cur;
     public:
         void open(char *buff){
@@ -42,7 +42,7 @@ namespace sjtu {
 
 	class InputOfBinary {
 
-		private:
+		public:
 			mystream fin;
 		
 		public:
@@ -104,7 +104,7 @@ namespace sjtu {
 
 	class OutputOfBinary {
 
-		private:
+		public:
 			mystream fout;
 		
 		public:
