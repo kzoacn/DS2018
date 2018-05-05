@@ -542,10 +542,282 @@ void query_ticket(string loc1,string loc2,string date,string catalog){
         ans+="\n";
     }
     cout<<cnt<<endl;
-    cout<<ans;
+    cout<<ans<<flush;
+}
+
+int delete_train(string trainid){
+static int flag=0;
+    static sqlite3_stmt *stmt,*stmt2,*stmt3;  
+    static const char* sql = "select sold from train where trainid=(?) limit 1;";  
+    static const char* sql2 = "delete from train where trainid=?;";  
+    static const char* sql3 = "delete from routine where trainid=?;";  
+    
+    if(!flag){
+        flag=1;
+        sqlite3_prepare_v2(db,sql,strlen(sql),&stmt,0); 
+        sqlite3_prepare_v2(db,sql2,strlen(sql2),&stmt2,0); 
+        sqlite3_prepare_v2(db,sql3,strlen(sql3),&stmt3,0); 
+    }
+    sqlite3_reset(stmt);
+    sqlite3_bind_text(stmt, 1, trainid.c_str(),trainid.length(),SQLITE_STATIC);
+    int rc=sqlite3_step(stmt);
+    
+    string ans;
+    if(rc!=SQLITE_ROW){
+        return 0;
+    }
+    
+    int sold=sqlite3_column_int(stmt,0);
+    if(sold) 
+        return 0;
+    sqlite3_reset(stmt2);
+    sqlite3_bind_text(stmt2, 1, trainid.c_str(),trainid.length(),SQLITE_STATIC);
+    sqlite3_step(stmt2);
+
+    sqlite3_reset(stmt3);
+    sqlite3_bind_text(stmt3, 1, trainid.c_str(),trainid.length(),SQLITE_STATIC);
+    sqlite3_step(stmt3);
+
+        
+    return 1;    
+}
+int modify_train(Train &train){
+    if(!delete_train(train.train_id))
+        return 0;
+    if(!add_train(train))
+        return 0;
+    return 1;
+}
+bool get_train(string trainid,string date){
+    static int flag=0;
+    static sqlite3_stmt *stmt,*stmt2,*stmt3,*stmt4,*stmt5;  
+    static const char* sql = "select info from train where date=(?) and trainid=(?);";  
+    if(!flag){
+        flag=1;
+        sqlite3_prepare_v2(db,sql,strlen(sql),&stmt,0); 
+    }
+    sqlite3_reset(stmt);
+    sqlite3_bind_text(stmt,1,date.c_str(),date.length(),SQLITE_STATIC);
+    sqlite3_bind_text(stmt,2,trainid.c_str(),trainid.length(),SQLITE_STATIC);
+    int rc=sqlite3_step(stmt);
+
+    string ans;
+    if(rc!=SQLITE_ROW)
+        return 0;
+    train.from_blob((char*)sqlite3_column_blob(stmt,0));
+    return 1;    
+}
+int buy_ticket(int id,int num,string trainid,string loc1,string loc2,string date,string ticket_kind){
+    if(!exist_id(id))
+        return 0;
+    static int flag=0;
+    static sqlite3_stmt *stmt,*stmt2,*stmt3,*stmt4,*stmt5;  
+    static const char* sql = "select info from train where date=(?) and trainid=(?);";  
+    static const char* sql2 = "update train set info=(?) where date=(?) and trainid=(?);";  
+    static const char* sql3 = "select num from ticket where id=(?) and trainid=(?) and loc1=(?) and loc2=(?) and date=(?) and ticket_kind=(?);";  
+    static const char* sql4 = "insert into ticket values(NULL,?,?,?,?,?,?,?,?);";  
+    static const char* sql5 = "update ticket set num=num+(?) where id=(?) and trainid=(?) and loc1=(?) and loc2=(?) and date=(?) and ticket_kind=(?);"; 
+    if(!flag){
+        flag=1;
+        sqlite3_prepare_v2(db,sql,strlen(sql),&stmt,0); 
+        sqlite3_prepare_v2(db,sql2,strlen(sql2),&stmt2,0); 
+        sqlite3_prepare_v2(db,sql3,strlen(sql3),&stmt3,0); 
+        sqlite3_prepare_v2(db,sql4,strlen(sql4),&stmt4,0); 
+        sqlite3_prepare_v2(db,sql5,strlen(sql5),&stmt5,0); 
+    }
+    sqlite3_reset(stmt);
+    sqlite3_bind_text(stmt,1,date.c_str(),date.length(),SQLITE_STATIC);
+    sqlite3_bind_text(stmt,2,trainid.c_str(),trainid.length(),SQLITE_STATIC);
+    int rc=sqlite3_step(stmt);
+
+    string ans;
+    if(rc!=SQLITE_ROW)
+        return 0;
+    train.from_blob((char*)sqlite3_column_blob(stmt,0));
+    ans+=train.train_id+" ";
+    int posi=-1,posj=-1;
+    for(int i=0;i<train.num_station;i++)if(train.station_name[i]==loc1)posi=i;
+    for(int i=0;i<train.num_station;i++)if(train.station_name[i]==loc2)posj=i;
+    if(posi==-1 || posj==-1 || posi>=posj)
+        return 0;
+        
+    double sum=0;
+    int nums=int(1e9);
+    int kind=-1;
+    for(int i=0;i<train.num_price;i++)if(train.ticket_name[i]==ticket_kind)kind=i;
+    if(kind==-1)return 0;
+    for(int k=posi;k<posj;k++){
+        sum+=train.price[k][kind];
+        nums=min(nums,train.ticket[k][kind]);
+    }
+    
+    if(num>=0 && nums<num)
+        return 0;
+    
+    for(int k=posi;k<posj;k++)
+        train.ticket[k][kind]-=num;
+    
+    sqlite3_reset(stmt3);
+    sqlite3_bind_int(stmt3,1,id);
+    sqlite3_bind_text(stmt3,2,trainid.c_str(),trainid.length(),SQLITE_STATIC);
+    sqlite3_bind_text(stmt3,3,loc1.c_str(),loc1.length(),SQLITE_STATIC);
+    sqlite3_bind_text(stmt3,4,loc2.c_str(),loc2.length(),SQLITE_STATIC);
+    sqlite3_bind_text(stmt3,5,date.c_str(),date.length(),SQLITE_STATIC);
+    sqlite3_bind_text(stmt3,6,ticket_kind.c_str(),ticket_kind.length(),SQLITE_STATIC);
+    rc=sqlite3_step(stmt3);
+    int onum=0;
+    if(rc==SQLITE_ROW){
+        onum=sqlite3_column_int(stmt3,0);
+    }
+    if(num < 0 && onum<-num)
+        return 0;
+
+    char *buff=train.to_blob();
+    sqlite3_reset(stmt2);
+    sqlite3_bind_blob(stmt2,1,buff,bout.fout.cur-buff,0);
+    sqlite3_bind_text(stmt2,2,date.c_str(),date.length(),SQLITE_STATIC);
+    sqlite3_bind_text(stmt2,3,trainid.c_str(),trainid.length(),SQLITE_STATIC);
+    sqlite3_step(stmt2);
+
+
+    if(rc!=SQLITE_ROW){
+        sqlite3_reset(stmt4);
+        sqlite3_bind_int(stmt4,1,id);
+        sqlite3_bind_int(stmt4,2,num);
+        sqlite3_bind_text(stmt4,3,trainid.c_str(),trainid.length(),SQLITE_STATIC);
+        sqlite3_bind_text(stmt4,4,loc1.c_str(),loc1.length(),SQLITE_STATIC);
+        sqlite3_bind_text(stmt4,5,loc2.c_str(),loc2.length(),SQLITE_STATIC);
+        sqlite3_bind_text(stmt4,6,date.c_str(),date.length(),SQLITE_STATIC);
+        sqlite3_bind_text(stmt4,7,train.catalog.c_str(),train.catalog.length(),SQLITE_STATIC);
+        sqlite3_bind_text(stmt4,8,ticket_kind.c_str(),ticket_kind.length(),SQLITE_STATIC);
+        sqlite3_step(stmt4);
+    }else{ 
+        sqlite3_reset(stmt5);
+        sqlite3_bind_int(stmt5,1,num);
+        sqlite3_bind_int(stmt5,2,id);
+        sqlite3_bind_text(stmt5,3,trainid.c_str(),trainid.length(),SQLITE_STATIC);
+        sqlite3_bind_text(stmt5,4,loc1.c_str(),loc1.length(),SQLITE_STATIC);
+        sqlite3_bind_text(stmt5,5,loc2.c_str(),loc2.length(),SQLITE_STATIC);
+        sqlite3_bind_text(stmt5,6,date.c_str(),date.length(),SQLITE_STATIC);
+        sqlite3_bind_text(stmt5,7,ticket_kind.c_str(),ticket_kind.length(),SQLITE_STATIC);
+        sqlite3_step(stmt5);
+    }
+
+    return 1;
+
+}
+
+void query_order(int id,string date,string catalog){
+    static int flag=0;
+    static sqlite3_stmt *stmt;  
+    static const char* sql = "select * from ticket where date=(?) and catalog=(?);";  
+    if(!flag){
+        flag=1;
+        sqlite3_prepare_v2(db,sql,strlen(sql),&stmt,0); 
+    }
+    sqlite3_reset(stmt);
+    sqlite3_bind_text(stmt, 1, date.c_str(),date.length(),SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, catalog.c_str(),catalog.length(),SQLITE_STATIC);
+    int rc=sqlite3_step(stmt);
+
+    string ans;
+    if(rc!=SQLITE_ROW){
+        cout<<"0"<<endl;
+        return ;
+    }
+    int cnt=0;
+    string dt;
+    while(rc==SQLITE_ROW){
+        cnt++;
+        int num=sqlite3_column_int(stmt,2);
+        string trainid=(const char*)sqlite3_column_text(stmt,3);
+        string loc1=(const char*)sqlite3_column_text(stmt,4);
+        string loc2=(const char*)sqlite3_column_text(stmt,5);
+        string date=(const char*)sqlite3_column_text(stmt,6);
+        string catalog=(const char*)sqlite3_column_text(stmt,7);
+        string ticket_kind=(const char*)sqlite3_column_text(stmt,8);
+
+
+        if(get_train(trainid,date)){
+            ans+=train.train_id+" ";
+            int posi=-1,posj=-1;
+            for(int i=0;i<train.num_station;i++)if(train.station_name[i]==loc1)posi=i;
+            for(int i=0;i<train.num_station;i++)if(train.station_name[i]==loc2)posj=i;
+            ans+=loc1+" "+date+" "+train.start_time[posi]+" ";
+            ans+=loc2+" "+date+" "+train.arriv_time[posj];
+            for(int i=0;i<train.num_price;i++)if(ticket_kind==train.ticket_name[i]){
+                ans+=" "+train.ticket_name[i];
+                double sum=0;
+                for(int k=posi;k<posj;k++){
+                    sum+=train.price[k][i];
+                }
+                ans+=" "+to_string(num)+" "+to_string(sum);
+            }
+            ans+="\n";
+        }else {
+            cout<<"0"<<endl;
+            return ;
+        }
+
+
+        rc=sqlite3_step(stmt);
+    }
+    cout<<cnt<<endl;
+    cout<<ans<<flush;    
+}
+void query_transfer(string loc1,string loc2,string date,string catalog){
+    static int flag=0;
+    static sqlite3_stmt *stmt;  
+    static const char* sql = "select distinct trainid from routine where loc1=(?) and catalog=(?)  union select distinct trainid from routine where loc2=(?) and catalog=(?)";  
+    static sqlite3_stmt *stmt2;  
+    static const char* sql2 = "select info from train where date=(?) and trainid=(?);";  
+
+    if(!flag){
+        flag=1;
+        sqlite3_prepare_v2(db,sql,strlen(sql),&stmt,0); 
+        sqlite3_prepare_v2(db,sql2,strlen(sql2),&stmt2,0); 
+    }
+    sqlite3_reset(stmt);
+    sqlite3_bind_text(stmt, 1, loc1.c_str(),loc1.length(),SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, catalog.c_str(),catalog.length(),SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, loc2.c_str(),loc2.length(),SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 4, catalog.c_str(),catalog.length(),SQLITE_STATIC);
+    int rc=sqlite3_step(stmt);
+
+    string ans;
+    if(rc!=SQLITE_ROW){
+        cout<<"0"<<endl;
+        return ;
+    }
+
+    vector<string>tids;
+    vector<Train>trains;
+    while(rc==SQLITE_ROW){
+        string tmp=(const char *)sqlite3_column_text(stmt,0);
+        tids.push_back(tmp);
+        rc=sqlite3_step(stmt);
+    }
+
+
+
+    if(rc!=SQLITE_ROW){
+        cout<<"0"<<endl;
+        return ;
+    }   
+    Train t; 
+    for(auto trainid : tids){
+        sqlite3_reset(stmt2);
+        sqlite3_bind_text(stmt2, 1, date.c_str(),date.length(),SQLITE_STATIC);
+        sqlite3_bind_text(stmt2, 2, trainid.c_str(),trainid.length(),SQLITE_STATIC);
+        rc=sqlite3_step(stmt2);
+        t.from_blob((char*)sqlite3_column_blob(stmt,0));
+        trains.push_back(t);
+    }
+
+
+
 }
 int main(){
-
     init_database();
     string cmd;
     try_start();
@@ -584,16 +856,27 @@ int main(){
             query_ticket(loc1,loc2,date,catalog);
         }else
         if(cmd=="query_transfer"){
-
+            string loc1,loc2,date,catalog;
+            cin>>loc1>>loc2>>date>>catalog;
+            query_transfer(loc1,loc2,date,catalog);
         }else
         if(cmd=="buy_ticket"){
-
+            string train_id,loc1,loc2,date,ticket_kind;
+            int id,num;
+            cin>>id>>num>>train_id>>loc1>>loc2>>date>>ticket_kind;
+            cout<<buy_ticket(id,num,train_id,loc1,loc2,date,ticket_kind)<<endl;
         }else
         if(cmd=="query_order"){
-
+            int id;
+            string date,catalog;
+            cin>>id>>date>>catalog;
+            query_order(id,date,catalog);
         }else
         if(cmd=="refund_ticket"){
-
+            string train_id,loc1,loc2,date,ticket_kind;
+            int id,num;
+            cin>>id>>num>>train_id>>loc1>>loc2>>date>>ticket_kind;
+            cout<<buy_ticket(id,-num,train_id,loc1,loc2,date,ticket_kind)<<endl;
         }else
         if(cmd=="add_train"){
             train.read();
@@ -610,9 +893,13 @@ int main(){
             query_train(trainid);
         }else
         if(cmd=="delete_train"){
-
+            string trainid;
+            cin>>trainid;
+            cout<<delete_train(trainid)<<endl;
         }else
         if(cmd=="modify_train"){
+            train.read();
+            cout<<modify_train(train)<<endl;
 
         }else
         if(cmd=="clean"){

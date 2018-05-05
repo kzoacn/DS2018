@@ -38,14 +38,17 @@ select info from train where trainid in
 (select trainid from routine where loc1=(?),loc2=(?),date=(?),catalog=(?));
 
 }
-
-query_transfer *loc1* *loc2* *date* *catalog* //
-
 buy_ticket *id* *num* *train_id* *loc1* *loc2* *date* *ticket_kind*{
     select * from ticket where  = = =;
     insert into ticket values(???);
     update ticket set num=num+? where = = ==;
 }
+
+
+
+
+query_transfer *loc1* *loc2* *date* *catalog* //
+
 
 refund_ticket *id* *num* *train_id* *loc1* *loc2* *date* *ticket_kind*{
     select * from ticket where  = = =;
@@ -53,6 +56,11 @@ refund_ticket *id* *num* *train_id* *loc1* *loc2* *date* *ticket_kind*{
     update ticket set num=num+? where = = ==;
     delete where  = = =    
 }
+
+
+
+
+
 
 add_train{
     insert into train values(???)
