@@ -197,7 +197,7 @@ void init_database(){
     run(table);
     run("create unique index if not exists idIndex on user(id);");
 
-    table="create table if not exists routine( \
+    table="create table if not exists route( \
             id integer primary key autoincrement, \
             loc1 text, \
             loc2 text, \
@@ -205,7 +205,7 @@ void init_database(){
             trainid text);";
 
     run(table);
-    run("create index if not exists rindex on routine(loc1,loc2,catalog);");
+    run("create index if not exists rindex on route(loc1,loc2,catalog);");
 
     table="create table if not exists ticket( \
             buyid integer primary key autoincrement, \
@@ -460,7 +460,7 @@ int sale_train(string trainid){
     static sqlite3_stmt *stmt,*stmt2,*stmt3;  
     static const char* sql = "select info,onsale from train where trainid=(?) limit 1;";  
     static const char* sql2 = "update train set onsale=1 where trainid=(?) ;";  
-    static const char* sql3 = "insert into routine values(NULL,?,?,?,?);";  
+    static const char* sql3 = "insert into route values(NULL,?,?,?,?);";  
     
     if(!flag){
         flag=1;
@@ -500,7 +500,7 @@ int sale_train(string trainid){
 void query_ticket(string loc1,string loc2,string date,string catalog){
     static int flag=0;
     static sqlite3_stmt *stmt;  
-    static const char* sql = "select info from train where date=(?) and trainid in (select trainid from routine where loc1=(?) and loc2=(?) and catalog=(?));";  
+    static const char* sql = "select info from train where date=(?) and trainid in (select trainid from route where loc1=(?) and loc2=(?) and catalog=(?));";  
     if(!flag){
         flag=1;
         sqlite3_prepare_v2(db,sql,strlen(sql),&stmt,0); 
@@ -550,7 +550,7 @@ static int flag=0;
     static sqlite3_stmt *stmt,*stmt2,*stmt3;  
     static const char* sql = "select sold from train where trainid=(?) limit 1;";  
     static const char* sql2 = "delete from train where trainid=?;";  
-    static const char* sql3 = "delete from routine where trainid=?;";  
+    static const char* sql3 = "delete from route where trainid=?;";  
     
     if(!flag){
         flag=1;
@@ -768,7 +768,7 @@ void query_order(int id,string date,string catalog){
 void query_transfer(string loc1,string loc2,string date,string catalog){
     static int flag=0;
     static sqlite3_stmt *stmt;  
-    static const char* sql = "select distinct trainid from routine where loc1=(?) and catalog=(?)  union select distinct trainid from routine where loc2=(?) and catalog=(?)";  
+    static const char* sql = "select distinct trainid from route where loc1=(?) and catalog=(?)  union select distinct trainid from route where loc2=(?) and catalog=(?)";  
     static sqlite3_stmt *stmt2;  
     static const char* sql2 = "select info from train where date=(?) and trainid=(?);";  
 
@@ -792,30 +792,116 @@ void query_transfer(string loc1,string loc2,string date,string catalog){
 
     vector<string>tids;
     vector<Train>trains;
+
+
+    if(rc!=SQLITE_ROW){
+        cout<<"0"<<endl;
+        return ;
+    }  
     while(rc==SQLITE_ROW){
         string tmp=(const char *)sqlite3_column_text(stmt,0);
         tids.push_back(tmp);
         rc=sqlite3_step(stmt);
     }
 
-
-
-    if(rc!=SQLITE_ROW){
-        cout<<"0"<<endl;
-        return ;
-    }   
     Train t; 
     for(auto trainid : tids){
         sqlite3_reset(stmt2);
         sqlite3_bind_text(stmt2, 1, date.c_str(),date.length(),SQLITE_STATIC);
         sqlite3_bind_text(stmt2, 2, trainid.c_str(),trainid.length(),SQLITE_STATIC);
         rc=sqlite3_step(stmt2);
-        t.from_blob((char*)sqlite3_column_blob(stmt,0));
-        trains.push_back(t);
+        if(rc==SQLITE_ROW){
+            t.from_blob((char*)sqlite3_column_blob(stmt2,0));
+            trains.push_back(t);
+        }
+    }
+    map<string,pair<string,string> >min_arriv;
+    map<string,pair<string,string> >min_dest;
+    for(auto &train : trains){
+        int pos=-1;
+        for(int i=0;i<train.num_station;i++){
+            if(train.station_name[i]==loc1)
+                pos=i;
+        }
+        if(pos==-1)continue;
+        if(min_arriv.count(loc1)){
+            min_arriv[loc1]=min(min_arriv[loc1],make_pair(train.start_time[pos],train.train_id));
+        }else min_arriv[loc1]=make_pair(train.start_time[pos],train.train_id);
+        for(int i=pos+1;i<train.num_station;i++){
+            auto &p=min_arriv[train.station_name[i]];
+            if(p.first!=""){
+                p=min(p,make_pair(train.arriv_time[i],train.train_id));
+            }else p=make_pair(train.arriv_time[i],train.train_id);
+        }
     }
 
 
+    for(auto &train : trains){
+        int pos=-1;
+        for(int i=0;i<train.num_station;i++){
+            if(train.station_name[i]==loc2)
+                pos=i;
+        }
+        if(pos==-1)continue;
+        
+        for(int i=0;i<pos;i++){
+            if(!min_arriv.count(train.station_name[i]))continue;
+            auto &p=min_arriv[train.station_name[i]];
+            if(train.start_time[i]>p.first){
+                auto &d=min_dest[train.station_name[i]];
+                if(d.first=="")d=make_pair(train.arriv_time[pos],train.train_id);
+                else d=min(d,make_pair(train.arriv_time[pos],train.train_id));
+            }
+        }
+    }
 
+
+    if(min_dest.empty()){
+        cout<<-1<<endl;
+        return ;
+    }
+    string mn=min_dest.begin()->first;
+    string mid;
+    for(auto &pr : min_dest){
+        if(pr.second.first < mn){
+            mn=pr.second.first;
+            mid=pr.first;
+        }
+    }
+
+    static auto find_way=[&](Train &train,string loc1,string loc2) -> string{
+        int posi=-1,posj=-1;
+        for(int i=0;i<train.num_station;i++){
+            if(train.station_name[i]==loc1)posi=i;
+            if(train.station_name[i]==loc2)posj=i;
+        }
+        string ans;
+        ans+=train.train_id+" ";
+        ans+=loc1+" "+date+" "+train.start_time[posi]+" ";
+        ans+=loc2+" "+date+" "+train.arriv_time[posj];
+        for(int i=0;i<train.num_price;i++){
+            ans+=" "+train.ticket_name[i];
+            double sum=0;
+            int num=int(1e9);
+            for(int k=posi;k<posj;k++){
+                sum+=train.price[k][i];
+                num=min(num,train.ticket[k][i]);
+            }
+            ans+=" "+to_string(num)+" "+to_string(sum);
+        }
+        return ans;
+    };
+    string ans1,ans2;
+    for(auto &train : trains){
+        if(train.train_id==min_arriv[mid].second){
+            ans1=find_way(train,loc1,mid);
+        }
+        if(train.train_id==min_dest[mid].second){
+            ans2=find_way(train,mid,loc2);
+        }
+    }
+    cout<<ans1<<endl;
+    cout<<ans2<<endl;
 }
 int main(){
     init_database();
