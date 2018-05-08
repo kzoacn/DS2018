@@ -100,7 +100,7 @@ public:
 	}
     void print(){
         cout<<fixed<<setprecision(2);
-        cout<<train_id<<" "<<name<<" "<<num_station<<" "<<num_price;
+        cout<<train_id<<" "<<name<<" "<<catalog<<" "<<num_station<<" "<<num_price;
         for(auto s:ticket_name)cout<<" "<<s;cout<<endl;
 		for(int i=0;i<num_station;i++){
             cout<<station_name[i]<<" ";
@@ -437,7 +437,7 @@ int add_train(Train &train){
 void query_train(string trainid){
     static int flag=0;
     static sqlite3_stmt *stmt;  
-    static const char* sql = "select info from train where trainid=(?) limit 1;";  
+    static const char* sql = "select info,onsale from train where trainid=(?) limit 1;";  
     if(!flag){
         flag=1;
         sqlite3_prepare_v2(db,sql,strlen(sql),&stmt,0); 
@@ -448,6 +448,11 @@ void query_train(string trainid){
     
     string ans;
     if(rc!=SQLITE_ROW){
+        cout<<"0"<<endl;
+        return ;
+    }
+    int onsale=sqlite3_column_int(stmt,1);
+    if(!onsale){
         cout<<"0"<<endl;
         return ;
     }
@@ -548,7 +553,7 @@ void query_ticket(string loc1,string loc2,string date,string catalog){
 int delete_train(string trainid){
 static int flag=0;
     static sqlite3_stmt *stmt,*stmt2,*stmt3;  
-    static const char* sql = "select sold from train where trainid=(?) limit 1;";  
+    static const char* sql = "select onsale from train where trainid=(?) limit 1;";  
     static const char* sql2 = "delete from train where trainid=?;";  
     static const char* sql3 = "delete from route where trainid=?;";  
     
@@ -567,8 +572,8 @@ static int flag=0;
         return 0;
     }
     
-    int sold=sqlite3_column_int(stmt,0);
-    if(sold) 
+    int onsale=sqlite3_column_int(stmt,0);
+    if(onsale) 
         return 0;
     sqlite3_reset(stmt2);
     sqlite3_bind_text(stmt2, 1, trainid.c_str(),trainid.length(),SQLITE_STATIC);
