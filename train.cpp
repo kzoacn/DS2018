@@ -427,7 +427,7 @@ int add_train(Train &train){
         sqlite3_bind_int(stmt,3,0);
         char *buff=train.to_blob();
         sqlite3_bind_blob(stmt,4,buff,bout.fout.cur-buff,0);
-        string  start="2018-04-"+string(1,'0'+i/10)+string(1,'0'+i%10);
+        string  start="2018-06-"+string(1,'0'+i/10)+string(1,'0'+i%10);
         sqlite3_bind_text(stmt, 5, start.c_str(), start.length(), SQLITE_STATIC);
         sqlite3_step(stmt);
     }
@@ -502,7 +502,9 @@ int sale_train(string trainid){
         
     return 1;
 }
-void query_ticket(string loc1,string loc2,string date,string catalog){
+
+vector<string>vec_string;
+void _query_ticket(string loc1,string loc2,string date,string catalog){
     static int flag=0;
     static sqlite3_stmt *stmt;  
     static const char* sql = "select info from train where date=(?) and trainid in (select trainid from route where loc1=(?) and loc2=(?) and catalog=(?));";  
@@ -519,7 +521,6 @@ void query_ticket(string loc1,string loc2,string date,string catalog){
 
     string ans;
     if(rc!=SQLITE_ROW){
-        cout<<"0"<<endl;
         return ;
     }
     int cnt=0;
@@ -539,19 +540,25 @@ void query_ticket(string loc1,string loc2,string date,string catalog){
             double sum=0;
             int num=int(1e9);
             for(int k=posi;k<posj;k++){
-                sum+=train.price[k][i];
+                sum+=train.price[k+1][i];
                 num=min(num,train.ticket[k][i]);
             }
             ans+=" "+to_string(num)+" "+to_string(sum);
         }
         ans+="\n";
     }
-    cout<<cnt<<endl;
-    cout<<ans<<flush;
+    vec_string.push_back(ans);
+}
+void query_ticket(string loc1,string loc2,string date,string catalog){
+	vec_string.clear();
+	for(int i=0;i<catalog.length();i++)
+		_query_ticket(loc1,loc2,date,catalog.substr(i,1));
+	for(auto s:vec_string)
+		cout<<s;cout<<flush;
 }
 
 int delete_train(string trainid){
-static int flag=0;
+	static int flag=0;
     static sqlite3_stmt *stmt,*stmt2,*stmt3;  
     static const char* sql = "select onsale from train where trainid=(?) limit 1;";  
     static const char* sql2 = "delete from train where trainid=?;";  
@@ -712,7 +719,7 @@ int buy_ticket(int id,int num,string trainid,string loc1,string loc2,string date
 
 }
 
-void query_order(int id,string date,string catalog){
+void _query_order(int id,string date,string catalog){
     static int flag=0;
     static sqlite3_stmt *stmt;  
     static const char* sql = "select * from ticket where date=(?) and catalog=(?);";  
@@ -727,7 +734,6 @@ void query_order(int id,string date,string catalog){
 
     string ans;
     if(rc!=SQLITE_ROW){
-        cout<<"0"<<endl;
         return ;
     }
     int cnt=0;
@@ -754,21 +760,27 @@ void query_order(int id,string date,string catalog){
                 ans+=" "+train.ticket_name[i];
                 double sum=0;
                 for(int k=posi;k<posj;k++){
-                    sum+=train.price[k][i];
+                    sum+=train.price[k+1][i];
                 }
                 ans+=" "+to_string(num)+" "+to_string(sum);
             }
             ans+="\n";
         }else {
-            cout<<"0"<<endl;
             return ;
         }
 
 
         rc=sqlite3_step(stmt);
     }
-    cout<<cnt<<endl;
-    cout<<ans<<flush;    
+    vec_string.push_back(ans);
+}
+
+void query_order(int id,string date,string catalog){
+	vec_string.clear();
+	for(int i=0;i<catalog.length();i++)
+		_query_order(id,date,catalog.substr(i,1));
+	for(auto s:vec_string)
+		cout<<s;cout<<flush;
 }
 void query_transfer(string loc1,string loc2,string date,string catalog){
     static int flag=0;
@@ -782,35 +794,32 @@ void query_transfer(string loc1,string loc2,string date,string catalog){
         sqlite3_prepare_v2(db,sql,strlen(sql),&stmt,0); 
         sqlite3_prepare_v2(db,sql2,strlen(sql2),&stmt2,0); 
     }
-    sqlite3_reset(stmt);
-    sqlite3_bind_text(stmt, 1, loc1.c_str(),loc1.length(),SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, catalog.c_str(),catalog.length(),SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 3, loc2.c_str(),loc2.length(),SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 4, catalog.c_str(),catalog.length(),SQLITE_STATIC);
-    int rc=sqlite3_step(stmt);
-
+    
     string ans;
-    if(rc!=SQLITE_ROW){
-        cout<<"0"<<endl;
-        return ;
-    }
 
-    vector<string>tids;
-    vector<Train>trains;
+	vector<string>tids;
+	vector<Train>trains;    
+    int rc;
+    for(int ix=0;ix<catalog.length();ix++){
+		string cata=catalog.substr(ix,1);		
+		sqlite3_reset(stmt);
+		sqlite3_bind_text(stmt, 1, loc1.c_str(),loc1.length(),SQLITE_STATIC);
+		sqlite3_bind_text(stmt, 2, catalog.c_str(),catalog.length(),SQLITE_STATIC);
+		sqlite3_bind_text(stmt, 3, loc2.c_str(),loc2.length(),SQLITE_STATIC);
+		sqlite3_bind_text(stmt, 4, cata.c_str(),cata.length(),SQLITE_STATIC);
+		rc=sqlite3_step(stmt);
 
 
-    if(rc!=SQLITE_ROW){
-        cout<<"0"<<endl;
-        return ;
-    }  
-    while(rc==SQLITE_ROW){
-        string tmp=(const char *)sqlite3_column_text(stmt,0);
-        tids.push_back(tmp);
-        rc=sqlite3_step(stmt);
-    }
+		while(rc==SQLITE_ROW){
+		    string tmp=(const char *)sqlite3_column_text(stmt,0);
+		    tids.push_back(tmp);
+		    rc=sqlite3_step(stmt);
+		}
+		
+	}
 
     Train t; 
-    for(auto trainid : tids){
+    for(auto trainid : tids){  
         sqlite3_reset(stmt2);
         sqlite3_bind_text(stmt2, 1, date.c_str(),date.length(),SQLITE_STATIC);
         sqlite3_bind_text(stmt2, 2, trainid.c_str(),trainid.length(),SQLITE_STATIC);
