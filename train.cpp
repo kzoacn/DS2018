@@ -804,7 +804,7 @@ void query_transfer(string loc1,string loc2,string date,string catalog){
 		string cata=catalog.substr(ix,1);		
 		sqlite3_reset(stmt);
 		sqlite3_bind_text(stmt, 1, loc1.c_str(),loc1.length(),SQLITE_STATIC);
-		sqlite3_bind_text(stmt, 2, catalog.c_str(),catalog.length(),SQLITE_STATIC);
+		sqlite3_bind_text(stmt, 2, cata.c_str(),cata.length(),SQLITE_STATIC);
 		sqlite3_bind_text(stmt, 3, loc2.c_str(),loc2.length(),SQLITE_STATIC);
 		sqlite3_bind_text(stmt, 4, cata.c_str(),cata.length(),SQLITE_STATIC);
 		rc=sqlite3_step(stmt);
@@ -898,7 +898,7 @@ void query_transfer(string loc1,string loc2,string date,string catalog){
             double sum=0;
             int num=int(1e9);
             for(int k=posi;k<posj;k++){
-                sum+=train.price[k][i];
+                sum+=train.price[k+1][i];
                 num=min(num,train.ticket[k][i]);
             }
             ans+=" "+to_string(num)+" "+to_string(sum);
@@ -923,6 +923,7 @@ int main(){
     try_start();
     while(cin>>cmd){
         
+        //cerr<<cmd<<endl;
         if(cmd=="register"){
             string name,password,email,phone;
             cin>>name>>password>>email>>phone;

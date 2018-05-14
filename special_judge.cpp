@@ -278,7 +278,6 @@ int main(int argc,char **argv){
 
     string cmd;
     while(cin>>cmd){
-        
         if(cmd=="register"){
             string name,password,email,phone;
             cin>>name>>password>>email>>phone;
@@ -363,7 +362,6 @@ int main(int argc,char **argv){
         if(cmd=="exit"){
             //cout<<"BYE"<<endl;
             assert_line();
-            break;
         }else{
             puts("Wrong Command");
         }
