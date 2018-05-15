@@ -2,7 +2,7 @@
 #include"binary.hpp"
 using namespace std;
 using namespace sjtu;
-
+int DEBUG=0;
 ifstream fin,fans,fout;
 
 
@@ -270,10 +270,11 @@ void query_transfer(string loc1,string loc2,string date,string catalog){
 }
 #define cin fin
 int main(int argc,char **argv){
-    if(argc!=4){
+    if(argc<4){
         cerr<<"./special_judge input output answer"<<endl;
         exit(0);
     }
+    if(argc>=5)DEBUG=1;
     cerr<<"get "<<argv[1]<<" "<<argv[2]<<" "<<argv[3]<<endl;
     fin.open(argv[1]);
     fout.open(argv[2]);
@@ -281,6 +282,7 @@ int main(int argc,char **argv){
 
     string cmd;
     while(cin>>cmd){
+        if(DEBUG)cerr<<cmd<<endl;
         if(cmd=="register"){
             string name,password,email,phone;
             cin>>name>>password>>email>>phone;

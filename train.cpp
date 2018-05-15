@@ -549,8 +549,10 @@ void _query_ticket(string loc1,string loc2,string date,string catalog){
             ans+=" "+to_string(num)+" "+to_string(sum);
         }
         ans+="\n";
+        vec_string.push_back(ans);
+        ans="";
     }
-    vec_string.push_back(ans);
+    
 }
 void query_ticket(string loc1,string loc2,string date,string catalog){
 	vec_string.clear();
@@ -769,6 +771,8 @@ void _query_order(int id,string date,string catalog){
                 ans+=" "+to_string(num)+" "+to_string(sum);
             }
             ans+="\n";
+            vec_string.push_back(ans);
+            ans="";
         }else {
             return ;
         }
@@ -776,7 +780,6 @@ void _query_order(int id,string date,string catalog){
 
         rc=sqlite3_step(stmt);
     }
-    vec_string.push_back(ans);
 }
 
 void query_order(int id,string date,string catalog){
