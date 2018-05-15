@@ -7,10 +7,13 @@ InputOfBinary bin;
 OutputOfBinary bout;
 char buff[1<<20];
 const string birthday="2018-04-01";
+int int_len=0;
 int to_int(string s){
     int x=0;
+    int_len=0;
     for(unsigned i=0;i<s.length();i++){
         x=x*10+(s[i]-'0');
+        int_len++;
     }
     return x;
 }
@@ -19,7 +22,7 @@ double to_double(string s){
         if(s[i]=='.'){
             double x=to_int(s.substr(0,i));
             double y=to_int(s.substr(i+1,(int)s.length()-i-1));
-            while(y>=1)y/=10;
+            while(int_len--)y/=10;
             return x+y;
         }
     }
@@ -553,6 +556,7 @@ void query_ticket(string loc1,string loc2,string date,string catalog){
 	vec_string.clear();
 	for(int i=0;i<catalog.length();i++)
 		_query_ticket(loc1,loc2,date,catalog.substr(i,1));
+    cout<<vec_string.size()<<endl;
 	for(auto s:vec_string)
 		cout<<s;cout<<flush;
 }
@@ -779,6 +783,7 @@ void query_order(int id,string date,string catalog){
 	vec_string.clear();
 	for(int i=0;i<catalog.length();i++)
 		_query_order(id,date,catalog.substr(i,1));
+    cout<<vec_string.size()<<endl;
 	for(auto s:vec_string)
 		cout<<s;cout<<flush;
 }

@@ -1,1 +1,1 @@
-../2/readme.txt
+../6/readme.txt

@@ -215,7 +215,9 @@ void query_train(string trainid){
 map<pair<string,string>,int>get_order(ifstream &fin){
     map<pair<string,string>,int>M;
 
-    int n;fin>>n;
+    int n;
+    string s;getline(fin,s);
+    n=to_int(s);
     if(n==-1)n=0;
     while(n--){
         string s;getline(fin,s);
@@ -253,6 +255,7 @@ string get_time(ifstream &fin){
     int n=2;
     for(int i=0;i<2;i++){
         string s;getline(fin,s);
+        if(s=="-1")return "-1";
         auto vec = split(s);
         if(i==1)
             return vec[6];
