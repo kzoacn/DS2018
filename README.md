@@ -1,7 +1,7 @@
 ### 环境
-
-#### For Debian/Ubuntu
 	sudo apt install libsqlite3*
+	
+Download binary.hpp,train.cpp and special_judge.cpp
 
 ### 编译
     g++ train.cpp -o train -std=c++11 -l sqlite3
@@ -14,4 +14,5 @@
 
 #### special_judge
     ./spj input output answer
+
 
