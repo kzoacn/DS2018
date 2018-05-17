@@ -507,6 +507,19 @@ int sale_train(string trainid){
 }
 
 vector<string>vec_string;
+string date_plus(string date,int x){
+    "2018-06-01";
+    int d=to_int(date.substr(8,2))+x;
+    if(d>=31){
+        date[6]='7';
+        date[8]='0';
+        date[9]='1';
+        return date;
+    }
+    date[8]=d/10+'0';
+    date[9]=d%10+'0';
+    return date;
+}
 void _query_ticket(string loc1,string loc2,string date,string catalog){
     static int flag=0;
     static sqlite3_stmt *stmt;  
@@ -534,18 +547,26 @@ void _query_ticket(string loc1,string loc2,string date,string catalog){
         rc=sqlite3_step(stmt);
         ans+=train.train_id+" ";
         int posi=-1,posj=-1;
+        int dd=0;
         for(int i=0;i<train.num_station;i++)if(train.station_name[i]==loc1)posi=i;
         for(int i=0;i<train.num_station;i++)if(train.station_name[i]==loc2)posj=i;
-        ans+=loc1+" "+date+" "+train.start_time[posi]+" ";
-        ans+=loc2+" "+date+" "+train.arriv_time[posj];
+        ans+=loc1+" "+date_plus(date,dd)+" "+train.start_time[posi]+" ";
+        if(train.start_time[posi]>train.arriv_time[posj])
+            dd++;
+        ans+=loc2+" "+date_plus(date,dd)+" "+train.arriv_time[posj];
+
         for(int i=0;i<train.num_price;i++){
             ans+=" "+train.ticket_name[i];
             double sum=0;
             int num=int(1e9);
+            dd=0;
             for(int k=posi;k<posj;k++){
                 sum+=train.price[k+1][i];
                 num=min(num,train.ticket[k][i]);
+                if(train.start_time[k]>train.arriv_time[k+1])
+                    dd++;
             }
+            if(dd>=2){cerr<<"trainid = "<<train.train_id<<" run more than 48h"<<endl;}
             ans+=" "+to_string(num)+" "+to_string(sum);
         }
         ans+="\n";
