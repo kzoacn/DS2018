@@ -223,7 +223,7 @@ map<pair<string,string>,int>get_order(ifstream &fin){
         string s;getline(fin,s);
         auto vec = split(s);
         myassert(vec.size()>=10);
-        string head=vec[0]+vec[1]+vec[2]+vec[3]+vec[4]+vec[5]+vec[6];
+        string head=vec[0]+vec[1]+vec[3]+vec[4]+vec[6];
         for(int i=7;i+2<vec.size();i+=3){
             M[{head,vec[i]}]+=to_int(vec[i+1]);
         }

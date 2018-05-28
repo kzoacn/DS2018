@@ -392,6 +392,8 @@ int modify_privilege(int id1,int id2,int privilege){
     if(pri1!=2)
         return 0;
     int pri2=get_privilege(id2);
+    if(pri2==2 && privilege==2)
+        return 1;
     if(pri2==2 || pri2==0)
         return 0;
     static int flag=0;
@@ -550,11 +552,14 @@ void _query_ticket(string loc1,string loc2,string date,string catalog){
         int dd=0;
         for(int i=0;i<train.num_station;i++)if(train.station_name[i]==loc1)posi=i;
         for(int i=0;i<train.num_station;i++)if(train.station_name[i]==loc2)posj=i;
-        for(int i=0;i<posi;i++)
+        for(int i=0;i<posi;i++){
             if(train.start_time[i]>train.arriv_time[i+1]){
                 dd++;
             }
-
+            if(train.start_time[i]<train.arriv_time[i]){
+                dd++;
+            }
+        }
         ans+=loc1+" "+date_plus(date,dd)+" "+train.start_time[posi]+" ";
         if(train.start_time[posi]>train.arriv_time[posj])
             dd++;
