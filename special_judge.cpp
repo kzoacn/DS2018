@@ -40,6 +40,23 @@ bool equal(double x,double y){
 void myassert(bool x){
     if(!x){
         cerr<<"difference at output : " << fout.tellg() << " answer : " << fans.tellg() <<" bytes "<<endl;
+
+        fout.seekg((long)fout.tellg()-100);
+        fans.seekg((long)fout.tellg()-100);
+        string s1,s2;
+        cerr<<"output :";
+        for(int i=0;i<10;i++){
+            fout>>s1;
+            cerr<<s1;
+        }cerr<<endl;
+
+
+        cerr<<"answer :";
+        for(int i=0;i<10;i++){
+            fans>>s1;
+            cerr<<s1;
+        }cerr<<endl;
+
         exit(-1);
     }
 }
